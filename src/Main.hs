@@ -47,18 +47,18 @@ import Numeric
 
 -- elftool entry point
 main = 
-do  args <- getArgs
-    case args of
-      [file] ->  do   bytes <- LBS.readFile $ arg
-                      let elf = parseElf bytes
-                      putStrLn "ELF Header Values"
-                      printHeader elf
-                      putStrLn ""
-                      putStrLn "ELF Sections"
-                      printSec elf
-                      printSym elf
-      _ ->      do    putStrLn "usage: elftool filename"
-                      putStrLn ""
+  do  args <- getArgs
+      case args of
+        [file] ->  do   bytes <- LBS.readFile $ file
+                        let elf = parseElf bytes
+                        putStrLn "ELF Header Values"
+                        printHeader elf
+                        putStrLn ""
+                        putStrLn "ELF Sections"
+                        printSec elf
+                        printSym elf
+        _ ->      do    putStrLn "usage: elftool filename"
+                        putStrLn ""
 
 printHeader :: Elf -> IO()
 printHeader elf = 
