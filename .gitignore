@@ -1,0 +1,7 @@
+.hsproject
+.settings
+.project
+bin
+out
+test_data
+_darcs
