@@ -55,6 +55,7 @@ main =
                         putStrLn ""
                         putStrLn "ELF Sections"
                         printSec elf
+                        putStrLn $ (show.dumpStrTab.elfSectionData) (elfFindSection elf ".strtab")
                         --printSym elf
         -- Print command line usage
         _ ->      do    putStrLn "usage: elftool filename"
@@ -90,7 +91,8 @@ printSec elf =
   do  let list = [addSpace 15.elfSectionName
                  ,addSpace 20.show.elfSectionType
                  ,addSpace 16.(\s -> (showHex.elfSectionAddr) s "")
-                 , (++ " bytes").addSpace 5.show.elfSectionSize 
+                 ,("bytes: " ++).addSpace 5.show.elfSectionSize
+                 ,addSpace 10.show.LBS.length.elfSectionData 
                  ]
       forM_ (elfSections elf) $  \s -> 
         do  putStrLn $ foldr (\x y-> (x s) ++ "  " ++  y) "" list
@@ -118,7 +120,12 @@ elfFindSection :: Elf -> String -> ElfSection
 elfFindSection elf name =
   head  $ filter  (\x -> elfSectionName x == name) (elfSections elf)
 
-
+dumpStrTab :: LBS.ByteString -> [String]
+dumpStrTab bs = 
+  let (left,right) = LBS.break (== 0) bs
+  in LBSChar.unpack left : if (not.LBS.null) right 
+                              then dumpStrTab (LBS.drop 1 right)
+                              else []
 
 data ElfSymbol = ElfSymbol
   { st_name  :: Word32
