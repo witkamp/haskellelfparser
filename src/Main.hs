@@ -32,8 +32,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 module Main where
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSChar
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.Char8 as LBSChar
 import System.Environment
@@ -49,6 +47,7 @@ import Numeric
 main = 
   do  args <- getArgs
       case args of
+        -- read in the elf file
         [file] ->  do   bytes <- LBS.readFile $ file
                         let elf = parseElf bytes
                         putStrLn "ELF Header Values"
@@ -56,7 +55,8 @@ main =
                         putStrLn ""
                         putStrLn "ELF Sections"
                         printSec elf
-                        printSym elf
+                        --printSym elf
+        -- Print command line usage
         _ ->      do    putStrLn "usage: elftool filename"
                         putStrLn ""
 
@@ -75,12 +75,34 @@ printHeader elf =
                ,show.elfType
                ,show.elfMachine 
                ]
-    
+               
+addSpace n str =  
+  let r = n - length str
+  in addSpace' r str
+
+addSpace' n str
+        | n <= 1  = str ++ " "
+        | otherwise = (addSpace' (n -1) str ) ++ " "
+
+
 printSec :: Elf -> IO()
-printSec elf = forM_ (elfSections elf) $  \s -> do
-                
-                putStrLn.elfSectionName $ s  
-                
+printSec elf = 
+  do  let list = [addSpace 15.elfSectionName
+                 ,addSpace 20.show.elfSectionType
+                 ,addSpace 16.(\s -> (showHex.elfSectionAddr) s "")
+                 , (++ " bytes").addSpace 5.show.elfSectionSize 
+                 ]
+      forM_ (elfSections elf) $  \s -> 
+        do  putStrLn $ foldr (\x y-> (x s) ++ "  " ++  y) "" list
+{-
+                putStr $ show $elfSectionName s
+                putStr "\t\t"
+                putStr $ show $ elfSectionType s   
+                putStr "\t\t"
+                putStr $ showHex $ elfSectionAddr s  
+                putStr "\t\t"
+                putStrLn $ show $ elfSectionSize s  
+-}                
 printSym :: Elf -> IO()
 printSym elf = 
   do
