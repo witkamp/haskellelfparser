@@ -55,7 +55,10 @@ main =
                         putStrLn ""
                         putStrLn "ELF Sections"
                         printSec elf
-                        putStrLn $ (show.dumpStrTab.elfSectionData) (elfFindSection elf ".strtab")
+                        let sym_list = (dumpStrTab.elfSectionData) $ elfFindSection elf ".strtab"
+                        forM_ sym_list  $  \s -> 
+                          do  putStrLn  s
+                          
                         --printSym elf
         -- Print command line usage
         _ ->      do    putStrLn "usage: elftool filename"
@@ -124,7 +127,8 @@ dumpStrTab :: LBS.ByteString -> [String]
 dumpStrTab bs = 
   let (left,right) = LBS.break (== 0) bs
   in LBSChar.unpack left : if (not.LBS.null) right 
-                              then dumpStrTab (LBS.drop 1 right)
+                              -- break does not eat the '\0' char so drop it
+                              then dumpStrTab $ LBS.drop 1 right
                               else []
 
 data ElfSymbol = ElfSymbol
