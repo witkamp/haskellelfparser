@@ -39,6 +39,7 @@ import System.IO
 import Control.Monad (forM,forM_)
 import Data.Elf
 import Data.Word
+import Data.Int
 import Data.Binary.Get
 import Data.Binary
 import Numeric
@@ -124,12 +125,17 @@ elfFindSection elf name =
   head  $ filter  (\x -> elfSectionName x == name) (elfSections elf)
 
 dumpStrTab :: LBS.ByteString -> [String]
-dumpStrTab bs = 
+dumpStrTab bs = dumpStrTab' bs 0
+
+dumpStrTab' :: LBS.ByteString -> Int64 -> [String]
+dumpStrTab' bs offset = 
   let (left,right) = LBS.break (== 0) bs
-  in LBSChar.unpack left : if (not.LBS.null) right 
-                              -- break does not eat the '\0' char so drop it
-                              then dumpStrTab $ LBS.drop 1 right
-                              else []
+      str          = (addSpace 5.shows offset $ "") ++ (LBSChar.unpack left)
+      consumed     = (+ 1).(+ offset).LBS.length  $ left
+  in str : if (not.LBS.null) right 
+              -- break does not eat the '\0' char so drop it
+              then dumpStrTab' (LBS.drop 1 right)  consumed
+              else []
 
 data ElfSymbol = ElfSymbol
   { st_name  :: Word32
