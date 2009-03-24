@@ -59,8 +59,8 @@ main =
                         let sym_list = (dumpStrTab.elfSectionData) $ elfFindSection elf ".strtab"
                         forM_ sym_list  $  \s -> 
                           do  putStrLn  s
-                          
-                        --printSym elf
+                        
+                        printSym elf
         -- Print command line usage
         _ ->      do    putStrLn "usage: elftool filename"
                         putStrLn ""
@@ -113,10 +113,11 @@ printSym :: Elf -> IO()
 printSym elf = 
   do
     putStrLn $ "Symbol Table"
-    forM_ (parseElfSymbol(elfSectionData (elfFindSection  elf ".symtab"))) $ 
+    let symtab = elfFindSection  elf ".symtab" :: ElfSection
+    forM_ ((parseElfSymbol.elfSectionData) symtab) $ 
       \s ->
       do
-        putStrLn $ showHex (st_name s) " " ++ (getElfString elf (st_value s))
+        putStrLn $ shows (st_name s) " " ++ (show(st_value s))
 
 -- Get the Symbol Table section
 elfFindSection :: Elf -> String -> ElfSection
@@ -165,10 +166,11 @@ instance Binary ElfSymbol where
 -- Parse the Symbol Table
 parseElfSymbol:: LBS.ByteString -> [ElfSymbol]
 
-parseElfSymbol bs = 
-  let (sym,new_bs,bytes) = runGetState (get :: Get ElfSymbol) bs 0
-  in sym : (parseElfSymbol new_bs)
-
+parseElfSymbol bs 
+  | not.LBS.null $  bs = 
+        let (sym,new_bs,bytes) = runGetState (get :: Get ElfSymbol) bs 0
+        in sym : (parseElfSymbol new_bs)
+  | otherwise = []
 getElfString :: Elf -> Word32 -> String
 getElfString elf offset =
   let strtab  = elfFindSection elf ".strtab"
