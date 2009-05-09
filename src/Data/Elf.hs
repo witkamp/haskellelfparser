@@ -17,7 +17,7 @@ import Data.Word
 import Numeric
 import Control.Monad
 import qualified Data.ByteString.Lazy       as L
-import qualified Data.ByteString.Lazy.Char8       as LC
+import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8      as BC
 
 data Elf = Elf
@@ -45,6 +45,7 @@ data ElfSection = ElfSection
     , elfSectionData      :: L.ByteString      -- ^ The raw data for the section.
     } deriving (Eq, Show)
 
+-- Check the file for the ELF magic number
 getElfMagic :: Get String
 getElfMagic = do
     bytes  <-  getBytes 4
@@ -75,6 +76,9 @@ data ElfSectionType
     | SHT_DYNSYM        -- ^ Contains a dynamic loader symbol table
     | SHT_EXT Word32    -- ^ Processor- or environment-specific type
     deriving (Eq, Show)
+
+-- get the section type
+-- TODO: getWord32 is called here
 getElfSectionType er = getWord32 er >>= return . getElfSectionType_
     where getElfSectionType_ 0  = SHT_NULL
           getElfSectionType_ 1  = SHT_PROGBITS
@@ -433,23 +437,26 @@ getElf_Shdr ei_class er elf_file string_section =
                 , elfSectionData      = L.take (fromIntegral sh_size) $ L.drop (fromIntegral sh_offset) elf_file
                 }
 
+-- Read in the ELF Header
 getElf_Ehdr :: Get (Elf, Word64, Word16, Word16, Word16)
 getElf_Ehdr = do
-    ei_magic    <- getElfMagic
-    ei_class    <- getElfClass
-    ei_data     <- getElfData
-    ei_version  <- liftM fromIntegral getElfVersion
+    ei_magic    <- getElfMagic  -- read the magic number  4 bytes
+    ei_class    <- getElfClass  -- read file class        1 byte
+    ei_data     <- getElfData   -- read data encoding     1 byte
+    ei_version  <- liftM fromIntegral getElfVersion -- file version 1 byte
     ei_osabi    <- getElfOsabi
     ei_abiver   <- liftM fromIntegral getWord8
     skip 7
-    er          <- return $ elfReader ei_data
+    er          <- return $ elfReader ei_data  -- get the reader for byte order
+    e_type      <- getElfType er
+    e_machine   <- getElfMachine er
+    e_version   <- getWord32 er
     case ei_class of
         ELFCLASS32 -> do
-            e_type      <- getElfType er
-            e_machine   <- getElfMachine er
-            e_version   <- getWord32 er
+            -- promote to Word64
             e_entry     <- getWord32 er >>= return . fromIntegral
             e_phoff     <- getWord32 er
+            -- promote to Word64
             e_shoff     <- getWord32 er >>= return . fromIntegral
             e_flags     <- getWord32 er
             e_ehsize    <- getWord16 er
@@ -469,9 +476,6 @@ getElf_Ehdr = do
                         , elfSections   = [] }
                    , e_shoff, e_shentsize, e_shnum, e_shstrndx)
         ELFCLASS64 -> do
-            e_type      <- getElfType er
-            e_machine   <- getElfMachine er
-            e_version   <- getWord32 er
             e_entry     <- getWord64 er
             e_phoff     <- getWord64 er
             e_shoff     <- getWord64 er

@@ -91,6 +91,7 @@ addSpace' n str
 
 
 printSec :: Elf -> IO()
+
 printSec elf = 
   do  let list = [addSpace 15.elfSectionName
                  ,addSpace 20.show.elfSectionType
@@ -117,7 +118,7 @@ printSym elf =
     forM_ ((parseElfSymbol.elfSectionData) symtab) $ 
       \s ->
       do
-        putStrLn $ shows (st_name s) " " ++ (show(st_value s))
+        putStrLn $ showHex (st_name s) " " ++ (show(st_value s))
 
 -- Get the Symbol Table section
 elfFindSection :: Elf -> String -> ElfSection
