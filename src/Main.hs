@@ -54,13 +54,19 @@ main =
                         putStrLn "ELF Header Values"
                         printHeader elf
                         putStrLn ""
+                        -- Dump Elf Sections
                         putStrLn "ELF Sections"
                         printSec elf
-                        let sym_list = (dumpStrTab.elfSectionData) $ elfFindSection elf ".strtab"
-                        forM_ sym_list  $  \s -> 
-                          do  putStrLn  s
-                        
-                        printSym elf
+                        putStrLn ""
+                        -- Dump the String table for debuging
+                        putStrLn "Dumping .strtab"
+                        let sym_list = (dump_strtab.elf_strtab) elf
+                        forM_ sym_list  $  \(o,s) -> 
+                            do  putStr (addSpace 5.shows o $ "") 
+                                putStrLn  (getElfString elf (fromIntegral o))
+
+                        -- Sump the Symbol Table
+                        --printSym elf
         -- Print command line usage
         _ ->      do    putStrLn "usage: elftool filename"
                         putStrLn ""
@@ -80,7 +86,9 @@ printHeader elf =
                ,show.elfType
                ,show.elfMachine 
                ]
-               
+
+
+-- Some nice little helpers for printing columns
 addSpace n str =  
   let r = n - length str
   in addSpace' r str
@@ -90,6 +98,7 @@ addSpace' n str
         | otherwise = (addSpace' (n -1) str ) ++ " "
 
 
+-- print a ELF Section
 printSec :: Elf -> IO()
 
 printSec elf = 
@@ -110,11 +119,16 @@ printSec elf =
                 putStr "\t\t"
                 putStrLn $ show $ elfSectionSize s  
 -}                
+
+-- Print the SymbolTable
+
 printSym :: Elf -> IO()
 printSym elf = 
   do
     putStrLn $ "Symbol Table"
+    -- Get the .symtab section
     let symtab = elfFindSection  elf ".symtab" :: ElfSection
+    -- Parse the Symbol Table
     forM_ ((parseElfSymbol.elfSectionData) symtab) $ 
       \s ->
       do
@@ -126,18 +140,26 @@ elfFindSection :: Elf -> String -> ElfSection
 elfFindSection elf name =
   head  $ filter  (\x -> elfSectionName x == name) (elfSections elf)
 
-dumpStrTab :: LBS.ByteString -> [String]
-dumpStrTab bs = dumpStrTab' bs 0
 
-dumpStrTab' :: LBS.ByteString -> Int64 -> [String]
-dumpStrTab' bs offset = 
+-- strtab section
+
+elf_strtab elf = 
+  let strtab   = elfFindSection elf ".strtab"
+  in  elfSectionData strtab
+
+
+dump_strtab :: LBS.ByteString -> [(Int64,String)]
+dump_strtab bs = dump_strtab' bs 0
+dump_strtab' :: LBS.ByteString -> Int64 -> [(Int64,String)]
+dump_strtab' bs offset = 
   let (left,right) = LBS.break (== 0) bs
-      str          = (addSpace 5.shows offset $ "") ++ (LBSChar.unpack left)
+      str          = LBSChar.unpack left
       consumed     = (+ 1).(+ offset).LBS.length  $ left
-  in str : if (not.LBS.null) right 
+  in (offset,str) : if (not.LBS.null) right 
               -- break does not eat the '\0' char so drop it
-              then dumpStrTab' (LBS.drop 1 right)  consumed
+              then dump_strtab' (LBS.drop 1 right)  consumed
               else []
+
 
 data ElfSymbol = ElfSymbol
   { st_name  :: Word32
@@ -172,16 +194,13 @@ parseElfSymbol bs
         let (sym,new_bs,bytes) = runGetState (get :: Get ElfSymbol) bs 0
         in sym : (parseElfSymbol new_bs)
   | otherwise = []
+
 getElfString :: Elf -> Word32 -> String
 getElfString elf offset =
-  let strtab  = elfFindSection elf ".strtab"
-      secData = elfSectionData strtab
+  let secData = elf_strtab elf
       s       = LBS.drop (fromIntegral offset) secData
       bs      = LBS.takeWhile (\x -> x /= 0)  s
   in LBSChar.unpack bs
-  
-  
-  
-  
-  
-  
+
+
+ 
