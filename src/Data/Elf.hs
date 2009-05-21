@@ -1,5 +1,10 @@
 -- | Data.Elf  is a module for parsing a ByteString of an ELF file into an Elf record.
-module Data.Elf (parseElf
+module Data.Elf ( parseElf
+                , getElfReader
+                , ElfReader
+                , getWord8
+                , getWord16
+                , getWord32
                 , Elf(..)
                 , ElfSection(..)
                 , ElfSectionType(..)
@@ -100,6 +105,7 @@ data ElfSectionFlags
     | SHF_EXECINSTR -- ^ Section contains executable instructions
     | SHF_EXT Int   -- ^ Processor- or environment-specific flag
     deriving (Eq, Show)
+
 getElfSectionFlags 0 word = []
 getElfSectionFlags 1 word | testBit word 1 = SHF_WRITE     : getElfSectionFlags 0 word
 getElfSectionFlags 2 word | testBit word 2 = SHF_ALLOC     : getElfSectionFlags 1 word
@@ -277,6 +283,8 @@ data ElfMachine
     | EM_UNICORE     -- ^ Microprocessor series from PKU-Unity Ltd. and MPRC of Peking University
     | EM_EXT Word16  -- ^ Other
     deriving (Eq, Show)
+
+
 getElfMachine er = getWord16 er >>= return . getElfMachine_
     where getElfMachine_ 0   = EM_NONE
           getElfMachine_ 1   = EM_M32
@@ -515,6 +523,8 @@ elfReader ELFDATA2MSB = ElfReader { getWord16 = getWord16be
                                   , getWord32 = getWord32be
                                   , getWord64 = getWord64be 
                                   }
+
+getElfReader elf = elfReader $ elfData elf
 
 divide :: L.ByteString -> Int -> Int -> [L.ByteString]
 divide bs s 0 = []

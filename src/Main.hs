@@ -61,12 +61,16 @@ main =
                         -- Dump the String table for debuging
                         putStrLn "Dumping .strtab"
                         let sym_list = (dump_strtab.elf_strtab) elf
-                        forM_ sym_list  $  \(o,s) -> 
-                            do  putStr (addSpace 5.shows o $ "") 
-                                putStrLn  (getElfString elf (fromIntegral o))
+                        forM_ sym_list  $  \(o,s) ->
+                            do  let gs = getElfString elf (fromIntegral o)
+                                    err  = gs /= s
+                                if err
+                                  then putStrLn "ERROR"
+                                  else do   putStr (addSpace 5.shows o $ "") 
+                                            putStrLn gs
 
                         -- Sump the Symbol Table
-                        --printSym elf
+                        printSym elf
         -- Print command line usage
         _ ->      do    putStrLn "usage: elftool filename"
                         putStrLn ""
@@ -120,19 +124,6 @@ printSec elf =
                 putStrLn $ show $ elfSectionSize s  
 -}                
 
--- Print the SymbolTable
-
-printSym :: Elf -> IO()
-printSym elf = 
-  do
-    putStrLn $ "Symbol Table"
-    -- Get the .symtab section
-    let symtab = elfFindSection  elf ".symtab" :: ElfSection
-    -- Parse the Symbol Table
-    forM_ ((parseElfSymbol.elfSectionData) symtab) $ 
-      \s ->
-      do
-        putStrLn $ showHex (st_name s) " " ++ (show(st_value s))
 
 -- Get the Symbol Table section
 elfFindSection :: Elf -> String -> ElfSection
@@ -150,7 +141,6 @@ elf_strtab elf =
 
 dump_strtab :: LBS.ByteString -> [(Int64,String)]
 dump_strtab bs = dump_strtab' bs 0
-dump_strtab' :: LBS.ByteString -> Int64 -> [(Int64,String)]
 dump_strtab' bs offset = 
   let (left,right) = LBS.break (== 0) bs
       str          = LBSChar.unpack left
@@ -161,39 +151,76 @@ dump_strtab' bs offset =
               else []
 
 
+
+-- Print the SymbolTable
+
+printSym :: Elf -> IO()
+printSym elf = 
+  do
+    putStrLn $ "Symbol Table"
+    -- Get the .symtab section
+    let symtab = elfFindSection  elf ".symtab" :: ElfSection
+        reader = getElfReader elf
+    -- Parse the Symbol Table
+    forM_ (((elf_symbols reader).elfSectionData) symtab) $ 
+      \s ->
+      do
+        putStrLn $ getElfString elf (st_name s)
+        putStrLn $ show (st_value s)
+        putStrLn $ show (st_size s)
+        putStrLn $ show (st_info s)
+        putStrLn $ show (st_other s)
+        putStrLn $ show (st_shndx s)
+        
+        
+         
+
 data ElfSymbol = ElfSymbol
   { st_name  :: Word32
   , st_value :: Word32
   , st_size  :: Word32
-  , st_info  :: Word8
-  , st_other :: Word8
-  , st_shndx :: Word16
+  , st_info  :: Word8       -- upper 4 bits are the BIND the lower the type
+  , st_other :: Word8       -- currently holds 0
+  , st_shndx :: Word16      -- Index of the section referenced in the symbol
   }
-  
-  
-instance Binary ElfSymbol where
-  put sym = do  put $ st_name   sym
-                put $ st_value  sym
-                put $ st_size   sym
-                put $ st_info   sym
-                put $ st_other  sym
-                put $ st_shndx  sym
-  get     = do  name  <- get
-                value <- get
-                size  <- get
-                info  <- get
-                other <- get
-                shndx <- get
-                return $ ElfSymbol name value size info other shndx
+
+{-
+  Binding value for the symbol
+-}
+data Elf_St_Bind = STB_LOCAL     -- value 0  Local Symbols
+                | STB_GLOBAL    -- value 1  Global Symbols
+                | STB_WEAK      -- value 2  
+                | STB_LOPROC    -- value 13 
+                | STB_MIDPROC   -- value 14 
+                | STB_HIPROC    -- value 15 
+
+data Elf_St_Type = STT_NOTYPE
+                 | STT_OBJECT
+                 | STT_FUNC
+                 | STT_SECTION
+                 | STT_FILE
+                 | STT_LOPROC
+                 | STT_MIDPROC
+                 | STT_HIPROC
+
+readElfSymbol er = 
+  do  name  <- getWord32 er
+      value <- getWord32 er
+      size  <- getWord32 er
+      info  <- get
+      other <- get
+      shndx <- getWord16 er
+      return $ ElfSymbol name value size info other shndx
 
 -- Parse the Symbol Table
-parseElfSymbol:: LBS.ByteString -> [ElfSymbol]
+elf_symbols:: ElfReader -> LBS.ByteString -> [ElfSymbol]
 
-parseElfSymbol bs 
+elf_symbols er bs
   | not.LBS.null $  bs = 
-        let (sym,new_bs,bytes) = runGetState (get :: Get ElfSymbol) bs 0
-        in sym : (parseElfSymbol new_bs)
+        let (sym,new_bs,bytes) = runGetState (readElfSymbol er) bs 0
+        in sym : (elf_symbols er new_bs)
   | otherwise = []
+
 
 getElfString :: Elf -> Word32 -> String
 getElfString elf offset =
