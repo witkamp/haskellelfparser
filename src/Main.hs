@@ -38,11 +38,13 @@ import System.Environment
 import System.IO
 import Control.Monad (forM,forM_)
 import Data.Elf
+import Data.Bits
 import Data.Word
 import Data.Int
 import Data.Binary.Get
 import Data.Binary
 import Numeric
+
 
 -- elftool entry point
 main = 
@@ -168,18 +170,18 @@ printSym elf =
         putStrLn $ getElfString elf (st_name s)
         putStrLn $ show (st_value s)
         putStrLn $ show (st_size s)
-        putStrLn $ show (st_info s)
+        putStrLn $ show (st_bind s)
+        putStrLn $ show (st_type s)
         putStrLn $ show (st_other s)
         putStrLn $ show (st_shndx s)
-        
-        
-         
 
 data ElfSymbol = ElfSymbol
   { st_name  :: Word32
   , st_value :: Word32
   , st_size  :: Word32
-  , st_info  :: Word8       -- upper 4 bits are the BIND the lower the type
+  --, st_info  :: Word8       -- upper 4 bits are the BIND the lower the type
+  , st_bind  :: Elf_St_Bind
+  , st_type  :: Elf_St_Type
   , st_other :: Word8       -- currently holds 0
   , st_shndx :: Word16      -- Index of the section referenced in the symbol
   }
@@ -187,30 +189,49 @@ data ElfSymbol = ElfSymbol
 {-
   Binding value for the symbol
 -}
-data Elf_St_Bind = STB_LOCAL     -- value 0  Local Symbols
-                | STB_GLOBAL    -- value 1  Global Symbols
-                | STB_WEAK      -- value 2  
-                | STB_LOPROC    -- value 13 
-                | STB_MIDPROC   -- value 14 
-                | STB_HIPROC    -- value 15 
+data Elf_St_Bind  = STB_LOCAL     -- value 0  Local Symbols
+                  | STB_GLOBAL    -- value 1  Global Symbols
+                  | STB_WEAK      -- value 2  
+                  | STB_LOPROC    -- value 13 
+                  | STB_MIDPROC   -- value 14 
+                  | STB_HIPROC    -- value 15
+                  deriving(Eq,Show)
 
-data Elf_St_Type = STT_NOTYPE
-                 | STT_OBJECT
-                 | STT_FUNC
-                 | STT_SECTION
-                 | STT_FILE
-                 | STT_LOPROC
-                 | STT_MIDPROC
-                 | STT_HIPROC
+data Elf_St_Type = STT_NOTYPE   -- 0
+                 | STT_OBJECT   -- 1
+                 | STT_FUNC     -- 2
+                 | STT_SECTION  -- 3
+                 | STT_FILE     -- 4
+                 | STT_LOPROC   -- 13
+                 | STT_MIDPROC  -- 14
+                 | STT_HIPROC   -- 15
+                 deriving(Eq,Show)
 
 readElfSymbol er = 
   do  name  <- getWord32 er
       value <- getWord32 er
       size  <- getWord32 er
-      info  <- get
+      info  <- getWord8
       other <- get
       shndx <- getWord16 er
-      return $ ElfSymbol name value size info other shndx
+      let _bind = _bind_read $ shiftR info 4 .&. 0xF
+          _type = _type_read $ info .&. 0xF
+      return $ ElfSymbol name value size _bind _type other shndx
+      where _bind_read 0 = STB_LOCAL
+            _bind_read 1 = STB_GLOBAL
+            _bind_read 2 = STB_WEAK
+            _bind_read 13 = STB_LOPROC
+            _bind_read 14 = STB_MIDPROC
+            _bind_read 15 = STB_HIPROC
+            _type_read 0  = STT_NOTYPE
+            _type_read 1  = STT_OBJECT
+            _type_read 2  = STT_FUNC
+            _type_read 3  = STT_SECTION
+            _type_read 4  = STT_FILE
+            _type_read 13 = STT_LOPROC
+            _type_read 14 = STT_MIDPROC
+            _type_read 15 = STT_HIPROC
+            
 
 -- Parse the Symbol Table
 elf_symbols:: ElfReader -> LBS.ByteString -> [ElfSymbol]
